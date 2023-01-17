@@ -1,2 +1,3 @@
 [workspace]
-members=["server", "client", "game"]
+members=["network", "game"]
+resolver="2"
