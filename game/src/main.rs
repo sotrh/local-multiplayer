@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use winit::{event_loop::EventLoop, platform::pump_events::EventLoopExtPumpEvents};
+use winit::event_loop::EventLoop;
 
 use crate::app::App;
 

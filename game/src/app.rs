@@ -99,7 +99,7 @@ impl ApplicationHandler<AppEvent> for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // let mut 
+        // let mut
         while let Some(event) = self.gamepads.next_event() {
             let player = *self
                 .players
@@ -138,6 +138,10 @@ impl ApplicationHandler<AppEvent> for App {
         match event {
             AppEvent::RendererCreated(renderer) => {
                 renderer.window.request_redraw();
+                self.game.resize(
+                    renderer.window.inner_size().width,
+                    renderer.window.inner_size().height,
+                );
                 self.renderer = Some(renderer);
             }
             AppEvent::RendererFailed => event_loop.exit(),
@@ -171,28 +175,28 @@ impl ApplicationHandler<AppEvent> for App {
                         self.wasd[W] = amount;
                         self.game.handle_input(InputEvent {
                             id,
-                            input: Input::Y(self.wasd[S] - self.wasd[W]),
+                            input: Input::Y(self.wasd[W] - self.wasd[S]),
                         });
                     }
                     KeyCode::KeyA | KeyCode::ArrowLeft => {
                         self.wasd[A] = amount;
                         self.game.handle_input(InputEvent {
                             id,
-                            input: Input::Y(self.wasd[D] - self.wasd[A]),
+                            input: Input::X(self.wasd[D] - self.wasd[A]),
                         });
                     }
                     KeyCode::KeyS | KeyCode::ArrowDown => {
                         self.wasd[S] = amount;
                         self.game.handle_input(InputEvent {
                             id,
-                            input: Input::Y(self.wasd[S] - self.wasd[W]),
+                            input: Input::Y(self.wasd[W] - self.wasd[S]),
                         });
                     }
                     KeyCode::KeyD | KeyCode::ArrowRight => {
                         self.wasd[D] = amount;
                         self.game.handle_input(InputEvent {
                             id,
-                            input: Input::Y(self.wasd[D] - self.wasd[A]),
+                            input: Input::X(self.wasd[D] - self.wasd[A]),
                         });
                     }
                     _ => {}
@@ -216,7 +220,10 @@ impl ApplicationHandler<AppEvent> for App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                renderer.resize(size.width, size.height);
+                self.game.resize(size.width, size.height);
+            }
             WindowEvent::RedrawRequested => {
                 renderer.window.request_redraw();
 

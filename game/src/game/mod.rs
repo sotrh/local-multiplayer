@@ -1,4 +1,8 @@
+pub mod camera;
+
 use std::{collections::HashSet, time::Duration};
+
+use crate::game::camera::Camera2d;
 
 pub struct InputEvent {
     pub(crate) id: PlayerId,
@@ -16,7 +20,7 @@ pub struct PlayerId(usize);
 #[derive(Debug)]
 pub struct Player {
     size: f32,
-    position: glam::Vec2,
+    pub(crate) position: glam::Vec2,
     joystick: glam::Vec2,
     score: f32,
     speed: f32,
@@ -30,6 +34,7 @@ pub struct Pickup {
 pub struct Game {
     players: Vec<Player>,
     pickups: Vec<Pickup>,
+    camera: Camera2d,
 }
 
 impl Game {
@@ -37,6 +42,7 @@ impl Game {
         Self {
             players: Vec::new(),
             pickups: Vec::new(),
+            camera: Camera2d::new(1.0, 1.0, glam::Vec2::ZERO),
         }
     }
 
@@ -47,7 +53,7 @@ impl Game {
             position: glam::vec2(0.0, 0.0),
             joystick: glam::vec2(0.0, 0.0),
             score: 0.0,
-            speed: 10.0,
+            speed: 100.0,
         });
         id
     }
@@ -91,9 +97,12 @@ impl Game {
             self.players[collision.player].score += self.pickups[collision.pickup].value;
         }
 
-        log::debug!("{:?}", self.players.iter().map(|p| p.joystick).collect::<Vec<_>>());
+        log::debug!(
+            "{:?}",
+            self.players.iter().map(|p| p.joystick).collect::<Vec<_>>()
+        );
     }
-    
+
     pub(crate) fn handle_input(&mut self, event: InputEvent) {
         let player = &mut self.players[event.id.0];
         match event.input {
@@ -101,6 +110,20 @@ impl Game {
             Input::Y(amount) => player.joystick.y = amount,
         }
     }
+    
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        self.camera.width = width as f32;
+        self.camera.height = height as f32;
+    }
+
+    pub(crate) fn players(&self) -> &[Player] {
+        &self.players
+    }
+
+    pub(crate) fn active_camera(&self) -> &Camera2d {
+        &self.camera
+    }
+
 }
 
 struct Collision {
