@@ -3,8 +3,8 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Vertex2d {
-    position: glam::Vec2,
-    uv: glam::Vec2,
+    pub(crate) position: glam::Vec2,
+    pub(crate) uv: glam::Vec2,
 }
 
 impl Vertex2d {

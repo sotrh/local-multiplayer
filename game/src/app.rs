@@ -14,7 +14,7 @@ use winit::{
 
 use crate::{
     game::{Game, Input, InputEvent, PlayerId},
-    render::Renderer,
+    render::{resources::FsResources, Renderer},
 };
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -51,21 +51,24 @@ pub struct App {
     game_timer: Instant,
     players: HashMap<DeviceId, PlayerId>,
     wasd: [f32; 4],
+    resources: FsResources,
 }
 
 impl App {
     pub fn new(event_loop: &EventLoop<AppEvent>) -> Self {
         let proxy = event_loop.create_proxy();
         let gamepads = gilrs::GilrsBuilder::new().build().unwrap();
+        let resources = FsResources::new("game/res");
         Self {
             gamepads,
             renderer: None,
             proxy,
-            game: Game::new(),
+            game: Game::new(Duration::from_secs_f32(1.0)),
             accumulator: Duration::ZERO,
             game_timer: Instant::now(),
             players: HashMap::new(),
             wasd: [0.0; 4],
+            resources,
         }
     }
 
@@ -86,8 +89,9 @@ impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = WindowAttributes::default();
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let resources = self.resources.clone();
         self.spawn_task(move || async {
-            match Renderer::new(window).await {
+            match Renderer::new(window, resources).await {
                 Ok(renderer) => AppEvent::RendererCreated(renderer),
                 Err(e) => {
                     log::error!("Failed to create renderer {}", e);

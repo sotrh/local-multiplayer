@@ -9,7 +9,7 @@ pub trait Camera {
 pub struct Camera2d {
     pub(crate) width: f32,
     pub(crate) height: f32,
-    position: glam::Vec2,
+    pub(crate) position: glam::Vec2,
 }
 
 impl Camera2d {

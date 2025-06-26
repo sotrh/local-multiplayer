@@ -1,7 +1,10 @@
 mod bindings;
 pub mod buffer;
+mod font;
 mod quad;
+pub mod resources;
 mod uniform;
+mod utils;
 pub mod vertex;
 
 use std::sync::Arc;
@@ -13,7 +16,9 @@ use winit::window::Window;
 use crate::render::{
     bindings::{CameraBinder, TextureBinder},
     buffer::BackedBuffer,
+    font::{Font, TextBuffer, TextPipeline},
     quad::QuadPipeline,
+    resources::FsResources,
     uniform::CameraData,
     vertex::{InstanceColor2d, Vertex2d},
 };
@@ -40,13 +45,19 @@ pub struct Renderer {
     player_vertices: BackedBuffer<Vertex2d>,
     player_indices: BackedBuffer<u32>,
     player_instances: BackedBuffer<InstanceColor2d>,
+    pickup_instances: BackedBuffer<InstanceColor2d>,
     camera_buffer: BackedBuffer<CameraData>,
     camera_binding: bindings::CameraBinding,
     player_texture_binding: bindings::TextureBinding,
+    font: Font,
+    text_pipeline: TextPipeline,
+    score_text: TextBuffer,
+    ui_camera_buffer: BackedBuffer<CameraData>,
+    ui_camera_binding: bindings::CameraBinding,
 }
 
 impl Renderer {
-    pub(crate) async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+    pub(crate) async fn new(window: Arc<Window>, resources: FsResources) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&Default::default());
 
         let surface = instance.create_surface(window.clone())?;
@@ -90,6 +101,8 @@ impl Renderer {
         let player_indices =
             BackedBuffer::with_data(&device, vec![0, 1, 2, 0, 2, 3], wgpu::BufferUsages::INDEX);
         let player_instances = BackedBuffer::with_capacity(&device, 8, wgpu::BufferUsages::VERTEX);
+        let pickup_instances =
+            BackedBuffer::with_capacity(&device, 128, wgpu::BufferUsages::VERTEX);
 
         let camera_buffer = BackedBuffer::with_data(
             &device,
@@ -97,6 +110,13 @@ impl Renderer {
             wgpu::BufferUsages::UNIFORM,
         );
         let camera_binding = camera_binder.bind(&device, &camera_buffer);
+
+        let ui_camera_buffer = BackedBuffer::with_data(
+            &device,
+            vec![CameraData::IDENTITY],
+            wgpu::BufferUsages::UNIFORM,
+        );
+        let ui_camera_binding = camera_binder.bind(&device, &ui_camera_buffer);
 
         let player_texture = device.create_texture_with_data(
             &queue,
@@ -122,6 +142,17 @@ impl Renderer {
         let player_texture_binding =
             texture_binder.bind(&device, &player_texture_view, &default_sampler);
 
+        let font = Font::load(&resources, "fonts/OpenSans MSDF.zip", '�', &device, &queue)?;
+        let text_pipeline = TextPipeline::new(
+            &device,
+            &font,
+            config.format,
+            &camera_binder,
+            &texture_binder,
+        )?;
+
+        let score_text = text_pipeline.buffer_text(&font, &device, "Press a button to start")?;
+
         Ok(Self {
             device,
             queue,
@@ -133,9 +164,15 @@ impl Renderer {
             player_vertices,
             player_indices,
             player_instances,
+            pickup_instances,
             camera_buffer,
             camera_binding,
+            ui_camera_buffer,
+            ui_camera_binding,
             player_texture_binding,
+            font,
+            text_pipeline,
+            score_text,
         })
     }
 
@@ -149,7 +186,6 @@ impl Renderer {
             Ok(frame) => frame,
             Err(e) => match e {
                 wgpu::SurfaceError::Outdated => {
-                    log::debug!("Outdated");
                     return true;
                 }
                 e => {
@@ -163,11 +199,33 @@ impl Renderer {
 
         {
             self.player_instances.clear();
+
             let mut instances_batch = self.player_instances.batch(&self.device, &self.queue);
+            let mut score_text = String::new();
+
             for (i, player) in game.players().iter().enumerate() {
                 instances_batch.push(InstanceColor2d::new(
                     player.position,
                     PLAYER_COLORS[i % PLAYER_COLORS.len()],
+                ));
+                score_text += &format!("Player {}: {}\n", i + 1, player.score);
+                self.text_pipeline.update_text(
+                    &self.font,
+                    &score_text,
+                    &mut self.score_text,
+                    &self.device,
+                    &self.queue,
+                );
+            }
+        }
+
+        {
+            self.pickup_instances.clear();
+            let mut batch = self.pickup_instances.batch(&self.device, &self.queue);
+            for pickup in game.pickups() {
+                batch.push(InstanceColor2d::new(
+                    pickup.position,
+                    glam::Vec4::splat(1.0),
                 ));
             }
         }
@@ -175,6 +233,8 @@ impl Renderer {
         {
             self.camera_buffer
                 .update(&self.queue, |data| data[0].update(game.active_camera()));
+            self.ui_camera_buffer
+                .update(&self.queue, |data| data[0].update(game.ui_camera()));
         }
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
@@ -203,6 +263,18 @@ impl Renderer {
                 &self.player_indices,
                 &self.player_instances,
             );
+
+            self.quad_pipeline.draw(
+                &mut pass,
+                &self.camera_binding,
+                &self.player_texture_binding,
+                &self.player_vertices,
+                &self.player_indices,
+                &self.pickup_instances,
+            );
+
+            self.text_pipeline
+                .draw_text(&mut pass, &self.score_text, &self.ui_camera_binding);
         }
 
         self.queue.submit([encoder.finish()]);
